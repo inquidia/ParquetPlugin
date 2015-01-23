@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<plugin
+   id="ParquetOutputPlugin"
+   iconfile="avro.png"
+   description="Parquet Output"
+   tooltip="This step outputs to a Parquet File"
+   category="Transform"
+   classname="org.openbi.kettle.plugins.parquetoutput.ParquetOutputMeta">
+   <libraries>
+    <library name="ParquetOutputPlugin.jar"/>
+	<library name="avro-1.6.2.jar"/>
+	<library name="parquet-hadoop-bundle-1.5.0.jar"/>
+	<library name="parquet-avro-1.5.0.jar"/>
+   </libraries>
+    
+   <localized_category>
+     <category locale="en_US">Big Data</category>
+   </localized_category>
+   <localized_description>
+     <description locale="en_US">Parquet Output</description>
+   </localized_description>
+   <localized_tooltip>
+     <tooltip locale="en_US">This step outputs to a Parquet File</tooltip>
+   </localized_tooltip>
+   
+</plugin>

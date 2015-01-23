@@ -1,0 +1,596 @@
+/*! ******************************************************************************
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ ******************************************************************************/
+
+package org.openbi.kettle.plugins.parquetoutput;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.commons.vfs.FileObject;
+import org.apache.hadoop.fs.Path;
+import org.pentaho.di.core.Const;
+import org.pentaho.di.core.ResultFile;
+import org.pentaho.di.core.exception.KettleException;
+import org.pentaho.di.core.exception.KettleFileException;
+import org.pentaho.di.core.exception.KettleStepException;
+import org.pentaho.di.core.row.ValueMetaInterface;
+import org.pentaho.di.core.variables.VariableSpace;
+import org.pentaho.di.core.vfs.KettleVFS;
+import org.pentaho.di.i18n.BaseMessages;
+import org.pentaho.di.trans.Trans;
+import org.pentaho.di.trans.TransMeta;
+import org.pentaho.di.trans.step.BaseStep;
+import org.pentaho.di.trans.step.StepDataInterface;
+import org.pentaho.di.trans.step.StepInterface;
+import org.pentaho.di.trans.step.StepMeta;
+import org.pentaho.di.trans.step.StepMetaInterface;
+import parquet.avro.AvroParquetWriter;
+import parquet.hadoop.ParquetWriter;
+import parquet.hadoop.metadata.CompressionCodecName;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
+/**
+ * Converts input rows to avro and then writes this avro to one or more files.
+ *
+ * @author Inquidia Consulting
+ */
+public class ParquetOutput extends BaseStep implements StepInterface {
+  private static Class<?> PKG = ParquetOutputMeta.class; // for i18n purposes, needed by Translator2!!
+
+  public ParquetOutputMeta meta;
+
+  public ParquetOutputData data;
+
+  private ParquetOutputField[] avroOutputFields;
+  private int outputFieldIndex;
+
+  public ParquetOutput( StepMeta stepMeta, StepDataInterface stepDataInterface, int copyNr, TransMeta transMeta,
+                        Trans trans ) {
+    super( stepMeta, stepDataInterface, copyNr, transMeta, trans );
+  }
+
+  private GenericRecord getRecord( Object[] r, String parentPath, Schema inputSchema ) throws KettleException
+  {
+    String parentName ="";
+    if(parentPath != null) {
+      parentName = new String( parentPath );
+    }
+
+    Schema recordSchema = inputSchema;
+
+    List<Schema> unionSchemas = null;
+    if( inputSchema.getType() == Schema.Type.UNION )
+    {
+      unionSchemas = inputSchema.getTypes();
+      if( unionSchemas != null ) {
+        for ( int i = 0; i < unionSchemas.size(); i++ ) {
+          if ( unionSchemas.get( i ).getType() == Schema.Type.RECORD ) {
+            recordSchema = unionSchemas.get( i );
+            break;
+          }
+        }
+      }
+    }
+
+    GenericRecord result = new GenericData.Record( recordSchema );
+    while( outputFieldIndex < avroOutputFields.length )
+    {
+
+      ParquetOutputField aof = avroOutputFields[outputFieldIndex];
+      String avroName = aof.getPath();
+
+      if( avroName.startsWith( "$." ) )
+      {
+        avroName = avroName.substring( 2 );
+      }
+      if( parentName == null || parentName.length() == 0 || avroName.startsWith( parentName + "." ) )
+      {
+        if( parentName != null && parentName.length() > 0 ) {
+          avroName = avroName.substring( parentName.length() + 1 );
+        }
+        if( avroName.contains( "." ) )
+        {
+          String currentAvroPath = avroName.substring( 0, avroName.indexOf( "." ) );
+          Schema childSchema = recordSchema.getField( currentAvroPath ).schema();
+          String childPath = parentName + "." + currentAvroPath;
+          if( parentName == null || parentName.length() == 0 )
+          {
+            childPath = currentAvroPath;
+          }
+
+          GenericRecord fieldRecord = getRecord( r, childPath, childSchema );
+          result.put( currentAvroPath, fieldRecord );
+        } else {
+          Object value = getValue( r, meta.getOutputFields()[outputFieldIndex], data.fieldnrs[outputFieldIndex] );
+          if( value != null )
+          {
+            result.put( avroName, value );
+          }
+          outputFieldIndex++;
+        }
+      } else {
+        break;
+      }
+    }
+    return result;
+  }
+
+
+  public Schema createAvroSchema( List<ParquetOutputField> avroFields, String parentPath ) throws KettleException
+  {
+    //Get standard schema stuff
+    String doc = "Generated by Parquet Output Step";
+    String recordName = "parquet";
+    String namespace = "pentaho";
+
+    //do not want to have to deal with $. paths.
+    if( parentPath.startsWith( "$." ) )
+    {
+      parentPath = parentPath.substring( 2 );
+    }
+
+    if( parentPath.endsWith( "." ) )
+    {
+      parentPath = parentPath.substring( 0, parentPath.length() - 1 );
+    }
+
+    // If the parent path is not empty the doc and recordname should not be the default
+    if( ! parentPath.isEmpty() )
+    {
+      doc = "Auto generated for path "+parentPath;
+      recordName=parentPath.replaceAll( "[^A-Za-z0-9\\_]", "_" );
+    }
+
+    //Create the result schema
+    Schema result = Schema.createRecord( recordName, doc, namespace, false );
+
+    List<Schema.Field> resultFields = new ArrayList<Schema.Field>();
+
+    //Can not use an iterator because we will change the list in the middle of this loop
+    for( int i = 0; i < avroFields.size(); i++ )
+    {
+      if( avroFields.get( i ) != null ) {
+        ParquetOutputField field = avroFields.get( i );
+
+        String avroName = field.getPath();
+
+        //Get rid of the $. stuff
+        if ( avroName.startsWith( "$." ) ) {
+          avroName = avroName.substring( 2 );
+        }
+
+        //The avroName includes the parent path.  We do not want the parent path for our evaluation.
+        String finalName = avroName;
+        if ( !parentPath.isEmpty() ) {
+          finalName = avroName.substring( parentPath.length() + 1 );
+        }
+
+        if ( finalName.contains( "." ) ) //It has children, perform children processing.
+        {
+          StringBuilder builder = new StringBuilder();
+          if( ! parentPath.isEmpty() ) {
+            builder.append( parentPath ).append( "." );
+          }
+          builder.append( finalName.substring( 0, finalName.indexOf( "." ) ) )
+            .append( "." );
+          String subPath = builder.toString();
+          List<ParquetOutputField> subFields = new ArrayList<ParquetOutputField>();
+          subFields.add( field );
+          boolean nullable = field.getNullable();
+          for ( int e = i + 1; e < avroFields.size(); e++ ) {
+            if( avroFields.get( e ) != null )
+            {
+              ParquetOutputField subFieldCandidate = avroFields.get( e );
+
+              String candidateName = subFieldCandidate.getPath();
+              if( candidateName.startsWith( "$." ) )
+              {
+                candidateName = candidateName.substring( 2 );
+              }
+
+              if( candidateName.startsWith( subPath ) )
+              {
+                if( nullable )
+                {
+                  nullable = subFieldCandidate.getNullable();
+                }
+
+                subFields.add( subFieldCandidate );
+                avroFields.remove( e );
+                e--;
+              }
+            }
+          }
+          subPath = subPath.substring( 0, subPath.length() - 1 );
+
+          Schema subSchema = createAvroSchema( subFields, subPath );
+          Schema outSchema = subSchema;
+          if( nullable ) {
+            Schema nullSchema = Schema.create( Schema.Type.NULL );
+            List<Schema> unionList = new ArrayList<Schema>();
+            unionList.add( nullSchema );
+            unionList.add( subSchema );
+            Schema unionSchema = Schema.createUnion( unionList );
+            outSchema = unionSchema;
+          }
+          Schema.Field schemaField = new Schema.Field( finalName.substring( 0, finalName.indexOf( "." ) )
+            , outSchema, null, null );
+          resultFields.add( schemaField );
+        } else { //Is not a sub field create the field.
+          int fieldIndex = data.outputRowMeta.indexOfValue( field.getName() );
+          Schema.Type fieldType = ParquetOutputField.getDefaultAvroType( data.outputRowMeta.getValueMeta( fieldIndex ).getType() );
+          Schema fieldSchema = Schema.create( fieldType );
+          Schema outSchema;
+          if( field.getNullable() )
+          {
+            Schema nullSchema = Schema.create( Schema.Type.NULL );
+
+            List< Schema > unionSchema = new ArrayList<Schema>();
+            unionSchema.add( nullSchema );
+            unionSchema.add( fieldSchema );
+            outSchema = Schema.createUnion( unionSchema );
+          } else {
+            outSchema = fieldSchema;
+          }
+          Schema.Field outField = new Schema.Field( finalName, outSchema, null, null );
+          resultFields.add( outField );
+        }
+      }
+    }
+
+    result.setFields( resultFields );
+    return result;
+  }
+
+
+  public synchronized boolean processRow( StepMetaInterface smi, StepDataInterface sdi ) throws KettleException {
+    meta = (ParquetOutputMeta) smi;
+    data = (ParquetOutputData) sdi;
+
+    boolean result = true;
+    Object[] r = getRow(); // This also waits for a row to be finished.
+
+    if ( r != null && first ) {
+      first = false;
+
+      data.outputRowMeta = getInputRowMeta().clone();
+      meta.getFields( data.outputRowMeta, getStepname(), null, null, this, repository, metaStore );
+
+      avroOutputFields = meta.getOutputFields();
+
+      List<ParquetOutputField> fields = new ArrayList<ParquetOutputField>();
+      for( ParquetOutputField avroField : meta.getOutputFields() )
+      {
+        fields.add( avroField );
+
+      }
+      data.avroSchema = createAvroSchema( fields, "" );
+
+      Arrays.sort( avroOutputFields );
+
+
+      data.fieldnrs = new int[avroOutputFields.length];
+      for ( int i = 0; i < avroOutputFields.length; i++ ) {
+        if( avroOutputFields[i].validate() ) {
+          data.fieldnrs[ i ] = data.outputRowMeta.indexOfValue( avroOutputFields[ i ].getName() );
+          if ( data.fieldnrs[ i ] < 0 ) {
+            throw new KettleStepException( "Field ["
+              + avroOutputFields[ i ].getName() + "] couldn't be found in the input stream!" );
+          }
+        }
+      }
+
+    }
+
+    if ( r == null ) {
+      // no more input to be expected...
+      closeFile();
+      setOutputDone();
+      data.avroSchema = null;
+      return false;
+    }
+
+    String filename = meta.getFilename();
+
+    if( meta.isAcceptFilenameFromField() )
+    {
+      filename = getInputRowMeta().getString( r, environmentSubstitute( meta.getFilenameField() ), "" );
+    }
+
+    if( Const.isEmpty( filename ) )
+    {
+      throw new KettleException( "Filename is empty!" );
+    }
+
+    int fileIndex = data.openFiles.indexOf( filename );
+
+    if( fileIndex < 0 ) {
+
+      try {
+        openNewFile( meta.getFilename() );
+      } catch ( Exception e ) {
+        logError( "Couldn't open file " + meta.getFilename(), e );
+        setErrors( 1L );
+        stopAll();
+        return false;
+      }
+      fileIndex = data.openFiles.indexOf( filename );
+    }
+
+    if( fileIndex < 0 )
+    {
+      logError( "Failed to open file." );
+      return false;
+    }
+
+    outputFieldIndex = 0;
+    GenericRecord row = getRecord( r, null, data.avroSchema );
+
+    try {
+      data.parquetWriters.get(fileIndex).write( row );
+    } catch ( IOException ex )
+    {
+      throw new KettleException( "Error writing row", ex );
+    }
+
+    // First handle the file name in field
+    // Write a header line as well if needed
+    //
+    putRow( data.outputRowMeta, r ); // in case we want it to go further...
+
+    if ( checkFeedback( getLinesOutput() ) ) {
+      logBasic( "linenr " + getLinesOutput() );
+    }
+
+    return result;
+  }
+
+  public Object getValue( Object[] r, ParquetOutputField outputField, int inputFieldIndex) throws KettleException
+  {
+    Object value;
+
+    switch( data.outputRowMeta.getValueMeta( inputFieldIndex ).getType() ) {
+      case ValueMetaInterface.TYPE_INTEGER :
+        value = data.outputRowMeta.getInteger( r, inputFieldIndex );
+        break;
+      case ValueMetaInterface.TYPE_BIGNUMBER :
+      case ValueMetaInterface.TYPE_NUMBER :
+        value = data.outputRowMeta.getNumber( r, inputFieldIndex );
+        break;
+      case ValueMetaInterface.TYPE_BOOLEAN :
+        value = data.outputRowMeta.getBoolean( r, inputFieldIndex );
+        break;
+      default :
+        value = data.outputRowMeta.getString( r, inputFieldIndex );
+        break;
+    }
+
+    return value;
+  }
+
+  public String buildFilename( String filename ) {
+    return meta.buildFilename(
+      filename, this, getCopy(), getPartitionID(), meta );
+  }
+
+  public void openNewFile( String baseFilename ) throws KettleException {
+    if ( baseFilename == null ) {
+      throw new KettleFileException( BaseMessages.getString( PKG, "ParquetOutput.Exception.FileNameNotSet" ) );
+    }
+
+    String filename = buildFilename( environmentSubstitute( baseFilename ) );
+
+    try {
+      // Check for parent folder creation only if the user asks for it
+      //
+      if ( meta.isCreateParentFolder() ) {
+        createParentFolder( filename );
+      }
+
+      if ( log.isDetailed() ) {
+        logDetailed( "Opening output file in default encoding" );
+      }
+
+      String compressionCodec = environmentSubstitute( meta.getCompressionCodec() );
+
+      if( Const.isEmpty( compressionCodec ) || compressionCodec.equalsIgnoreCase( "none" ) )
+      {
+        compressionCodec = "uncompressed";
+      }
+
+      CompressionCodecName compressionCodecName = CompressionCodecName.fromConf( compressionCodec );
+
+      //Convert to bytes
+      int blockSize = -1;
+
+      blockSize = Const.toInt( environmentSubstitute( meta.getBlockSize() ), -1 ) * 1024 * 1024 ;
+
+
+      if( blockSize <= 0 )
+      {
+        throw new KettleException( "Error setting block size.  Must be greater than 0." );
+      }
+
+      int pageSize = Const.toInt( environmentSubstitute( meta.getPageSize() ), -1 ) * 1024;
+
+      if( pageSize <= 0 )
+      {
+        throw new KettleException( "Error setting page size.  Must be greater than 0." );
+      }
+
+     /* HadoopConfiguration hadoopConfiguration =
+        HadoopConfigurationBootstrap.getHadoopConfigurationProvider().getActiveConfiguration();
+      HadoopShim shim = hadoopConfiguration.getHadoopShim();
+      Configuration conf = shim.createConfiguration();
+
+      FileSystem fs = shim.getFileSystem( conf );
+      Path path = fs.asPath( file.getName().getURI() );
+      */
+
+
+      FileObject file = KettleVFS.getFileObject( filename );
+
+      //Path path = shim.getFileSystem( conf ).asPath( file.getName().getURI() );
+      Path path = new Path( file.getName().getURI() );
+
+      if( meta.isCleanOutput() && file.exists() )
+      {
+        file.delete();
+      }
+
+      data.parquetWriters.add(
+        new AvroParquetWriter( path, data.avroSchema, compressionCodecName, blockSize, pageSize ) );
+      data.openFiles.add( baseFilename );
+
+      if ( log.isDetailed() ) {
+        logDetailed( "Opened new file with name [" + filename + "]" );
+      }
+    } catch ( Exception e ) {
+      throw new KettleException( "Error opening new file : " + e.toString(), e );
+    }
+
+    data.splitnr++;
+
+    if ( meta.isAddToResult() ) {
+      // Add this to the result file names...
+      ResultFile resultFile =
+        new ResultFile( ResultFile.FILE_TYPE_GENERAL, getFileObject( filename, getTransMeta() ), getTransMeta()
+          .getName(), getStepname() );
+      resultFile.setComment( BaseMessages.getString( PKG, "AvroOutput.AddResultFile" ) );
+      addResultFile( resultFile );
+    }
+  }
+
+  private boolean closeFile() {
+    boolean retval = false;
+
+
+    if( data.parquetWriters != null ) {
+      Iterator<ParquetWriter> openFiles = data.parquetWriters.iterator();
+      while ( openFiles.hasNext() ) {
+        ParquetWriter writer = openFiles.next();
+        if ( writer != null ) {
+          try {
+            writer.close();
+          } catch ( Exception e ) {
+            logBasic( "Error trying to close file.  This may not be a problem.");
+            logDetailed( "Stack trace from error trying to close file:", e );
+          }
+          writer = null;
+        }
+      }
+
+      if ( log.isDebug() ) {
+        logDebug( "Closed all open parquet writers." );
+      }
+    }
+
+
+
+    return retval;
+  }
+  
+  
+  public boolean init( StepMetaInterface smi, StepDataInterface sdi ) {
+    meta = (ParquetOutputMeta) smi;
+    data = (ParquetOutputData) sdi;
+
+    if ( super.init( smi, sdi ) ) {
+      data.splitnr = 0;
+
+
+
+      
+      return true;
+    }
+
+    return false;
+  }
+
+
+  public void dispose( StepMetaInterface smi, StepDataInterface sdi ) {
+    meta = (ParquetOutputMeta) smi;
+    data = (ParquetOutputData) sdi;
+
+    if ( data.parquetWriters.size() > 0 ) {
+      closeFile();
+
+    }
+    data.parquetWriters.clear();
+    data.avroSchema = null;
+
+	super.dispose( smi, sdi );
+  }
+
+
+  private void createParentFolder( String filename ) throws Exception {
+    // Check for parent folder
+    FileObject parentfolder = null;
+    FileObject schemaParentFolder = null;
+    try {
+      // Get parent folder
+      parentfolder = getFileObject( filename ).getParent();
+      if ( parentfolder.exists() ) {
+        if ( isDetailed() ) {
+          logDetailed( BaseMessages
+            .getString( PKG, "AvroOutput.Log.ParentFolderExist", parentfolder.getName() ) );
+        }
+      } else {
+        if ( isDetailed() ) {
+          logDetailed( BaseMessages.getString( PKG, "AvroOutput.Log.ParentFolderNotExist", parentfolder
+            .getName() ) );
+        }
+        if ( meta.isCreateParentFolder() ) {
+          parentfolder.createFolder();
+          if ( isDetailed() ) {
+            logDetailed( BaseMessages.getString( PKG, "AvroOutput.Log.ParentFolderCreated", parentfolder
+              .getName() ) );
+          }
+        } else {
+          throw new KettleException( BaseMessages.getString(
+            PKG, "AvroOutput.Log.ParentFolderNotExistCreateIt", parentfolder.getName(), filename ) );
+        }
+      }
+      
+
+    } finally {
+      if ( parentfolder != null ) {
+        try {
+          parentfolder.close();
+        } catch ( Exception ex ) {
+          // Ignore
+        }
+      }
+
+    }
+  }
+
+  protected FileObject getFileObject( String vfsFilename ) throws KettleFileException {
+    return KettleVFS.getFileObject( vfsFilename );
+  }
+
+  protected FileObject getFileObject( String vfsFilename, VariableSpace space ) throws KettleFileException {
+    return KettleVFS.getFileObject( vfsFilename, space );
+  }
+
+
+
+}

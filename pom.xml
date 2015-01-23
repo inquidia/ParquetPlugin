@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.inquidia.kettle.plugins.parquetoutput</groupId>
+    <artifactId>ParquetOutputPlugin</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <repositories>
+        <repository>
+            <id>pentaho</id>
+            <url>http://repository.pentaho.org/artifactory/repo/</url>
+        </repository>
+        <repository>
+            <id>cloudera</id>
+            <url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <dependency>
+            <groupId>pentaho-kettle</groupId>
+            <artifactId>kettle-engine</artifactId>
+            <version>5.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>pentaho-kettle</groupId>
+            <artifactId>kettle-core</artifactId>
+            <version>5.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>pentaho-kettle</groupId>
+            <artifactId>kettle-dbdialog</artifactId>
+            <version>5.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>pentaho-kettle</groupId>
+            <artifactId>kettle-jdbc</artifactId>
+            <version>5.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>pentaho-kettle</groupId>
+            <artifactId>kettle-ui-swt</artifactId>
+            <version>TRUNK-SNAPSHOT</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>pentaho</groupId>
+            <artifactId>pentaho-big-data-plugin</artifactId>
+            <version>TRUNK-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.twitter</groupId>
+            <artifactId>parquet-avro</artifactId>
+            <version>1.2.5-cdh5.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.twitter</groupId>
+            <artifactId>parquet-format</artifactId>
+            <version>1.0.0-cdh5.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.twitter</groupId>
+            <artifactId>parquet-hadoop</artifactId>
+            <version>1.2.5-cdh5.0.3</version>
+        </dependency>
+      <dependency>
+        <groupId>pentaho</groupId>
+        <artifactId>pentaho-hadoop-shims-hadoop-20</artifactId>
+        <version>TRUNK-SNAPSHOT</version>
+      </dependency>
+      <dependency>
+        <groupId>pentaho</groupId>
+        <artifactId>pentaho-hadoop-shims-hadoop-20-mapred</artifactId>
+        <version>TRUNK-SNAPSHOT</version>
+      </dependency>
+      <dependency>
+        <groupId>pentaho</groupId>
+        <artifactId>pentaho-hadoop-shims-api</artifactId>
+        <version>TRUNK-SNAPSHOT</version>
+      </dependency>
+
+    </dependencies>
+
+
+
+    <build>
+        <sourceDirectory>src</sourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
