@@ -5,13 +5,13 @@ The Parquet Plugin for Pentaho Data Integration allows you to output Parquet fil
 
 This Plugin is tightly integrated with Hadoop.  It is recommended this plugin only be used when writing to files in HDFS.
 
-A big thank you to my employer [Inquidia Consulting](www.inquidia.com) for allowing me to open source this plugin.
+Released as open source by [Inquidia Consulting](www.inquidia.com).
 
 System Requirements
 ---
 -Pentaho Data Integration 5.0 or above
 -Pentaho Big Data Plugin
--The Hadoop client must be installed on the machine if trying to write to Parquet files on the local machine.
+-The Hadoop client must be installed on the machine if trying to write to Parquet files on the local machine instead of HDFS.
 
 Installation
 ---
