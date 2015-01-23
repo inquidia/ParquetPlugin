@@ -31,7 +31,7 @@ Installation
 
 Pentaho currently does not provide a mechanism allowing for plugin steps to be dependent on the Pentaho Big Data Plugin shims.  Due to this, the following steps must be followed to use this plugin.
 
-1. Copy the following files from the data-integration/plugins/pentaho-big-data-plugin/hadoop-configurations/<environment>/lib/client folder to the data-integration/lib folder.
+1. Copy the following files from the data-integration/plugins/pentaho-big-data-plugin/hadoop-configurations/{environment}/lib/client folder to the data-integration/lib folder.
 
   1.1. commons-cli.jar
   
