@@ -32,10 +32,15 @@ Installation
 Pentaho currently does not provide a mechanism allowing for plugin steps to be dependent on the Pentaho Big Data Plugin shims.  Due to this, the following steps must be followed to use this plugin.
 
 1. Copy the following files from the \plugins\pentaho-big-data-plugin\hadoop-configurations\<environment>\lib\client folder to the data-integration\lib folder.
+
   1.1. commons-cli.jar
+  
   1.2. commons-configuration.jar
+  
   1.3. hadoop*.jar
+  
   1.4. protobuf-java.jar
+  
 2. It is recommended you copy your Hadoop configuration files (hdfs-site.xml, core-site.xml, etc.) to the data-integration folder.
 
 Parquet Output Usage
