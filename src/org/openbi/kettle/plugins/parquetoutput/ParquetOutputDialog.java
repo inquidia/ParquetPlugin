@@ -342,7 +342,6 @@ public class ParquetOutputDialog extends BaseStepDialog implements StepDialogInt
     wlCleanOutput.setLayoutData( fdlCleanOutput );
 
     wCleanOutput = new Button( wFileComp, SWT.CHECK );
-    wCleanOutput = new Button( wFileComp, SWT.CHECK );
     wCleanOutput.setToolTipText( BaseMessages.getString( PKG, "ParquetOutputDialog.CleanOutput.Tooltip" ) );
     props.setLook( wCleanOutput );
     fdCleanOutput = new FormData();
