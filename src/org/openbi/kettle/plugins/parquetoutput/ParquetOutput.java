@@ -43,7 +43,6 @@ import parquet.hadoop.metadata.CompressionCodecName;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -284,7 +283,7 @@ public class ParquetOutput extends BaseStep implements StepInterface {
       }
       data.avroSchema = createAvroSchema( fields, "" );
 
-      Arrays.sort( avroOutputFields );
+      //Arrays.sort( avroOutputFields );
 
 
       data.fieldnrs = new int[avroOutputFields.length];
@@ -325,7 +324,7 @@ public class ParquetOutput extends BaseStep implements StepInterface {
     if( fileIndex < 0 ) {
 
       try {
-        openNewFile( meta.getFilename() );
+        openNewFile( filename );
       } catch ( Exception e ) {
         logError( "Couldn't open file " + meta.getFilename(), e );
         setErrors( 1L );
