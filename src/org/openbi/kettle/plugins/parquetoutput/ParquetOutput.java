@@ -19,7 +19,7 @@ package org.openbi.kettle.plugins.parquetoutput;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.commons.vfs.FileObject;
+import org.apache.commons.vfs2.FileObject;
 import org.apache.hadoop.fs.Path;
 import org.pentaho.di.core.Const;
 import org.pentaho.di.core.ResultFile;

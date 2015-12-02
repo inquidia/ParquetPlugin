@@ -9,7 +9,8 @@ Released as open source by [Inquidia Consulting](www.inquidia.com).
 
 System Requirements
 ---
-- Pentaho Data Integration 5.0 or above
+- (Version 2 and above) Pentaho Data Integration 6.0 or above
+- (Version 1.0.1 and below) Pentaho Data Integration 5.0 or above
 - Pentaho Big Data Plugin
 - The Hadoop client must be installed on the machine if trying to write to Parquet files on the local machine instead of HDFS.
 

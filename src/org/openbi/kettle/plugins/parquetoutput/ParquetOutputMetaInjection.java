@@ -16,10 +16,14 @@
 
 package org.openbi.kettle.plugins.parquetoutput;
 
+import org.apache.avro.generic.GenericData;
+import org.pentaho.di.core.Const;
 import org.pentaho.di.core.exception.KettleException;
 import org.pentaho.di.core.row.ValueMetaInterface;
 import org.pentaho.di.trans.step.StepInjectionMetaEntry;
+import org.pentaho.di.trans.step.StepMetaInjectionEntryInterface;
 import org.pentaho.di.trans.step.StepMetaInjectionInterface;
+import static org.pentaho.di.trans.step.StepInjectionUtil.getEntry;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -32,7 +36,7 @@ import java.util.List;
  */
 public class ParquetOutputMetaInjection implements StepMetaInjectionInterface {
 
-  public enum Entry {
+  public enum Entry implements StepMetaInjectionEntryInterface {
 
     FILENAME( ValueMetaInterface.TYPE_STRING, "The output filename." ),
     FILENAME_IN_FIELD( ValueMetaInterface.TYPE_STRING, "The filename is in a field? (Y/N)" ),
@@ -92,7 +96,6 @@ public class ParquetOutputMetaInjection implements StepMetaInjectionInterface {
     this.meta = meta;
   }
 
-  @Override
   public List<StepInjectionMetaEntry> getStepInjectionMetadataEntries() throws KettleException {
     List<StepInjectionMetaEntry> all = new ArrayList<StepInjectionMetaEntry>();
 
@@ -127,7 +130,6 @@ public class ParquetOutputMetaInjection implements StepMetaInjectionInterface {
     return all;
   }
 
-  @Override
   public void injectStepMetadataEntries( List<StepInjectionMetaEntry> all ) throws KettleException {
 
     List<String> outputFields = new ArrayList<String>();
@@ -252,6 +254,42 @@ public class ParquetOutputMetaInjection implements StepMetaInjectionInterface {
       }
       meta.setOutputFields( aof );
     }
+  }
+
+  public List<StepInjectionMetaEntry> extractStepMetadataEntries() throws KettleException {
+    List<StepInjectionMetaEntry> result = new ArrayList<StepInjectionMetaEntry>();
+    result.add( getEntry( Entry.FILENAME, meta.getFilename() ) );
+    result.add( getEntry( Entry.FILENAME_IN_FIELD, meta.isAcceptFilenameFromField() ) );
+    result.add( getEntry( Entry.FILENAME_FIELD, meta.getFilenameField() ) );
+    result.add( getEntry( Entry.CLEAN_OUTPUT, meta.isCleanOutput() ) );
+    result.add( getEntry( Entry.CREATE_PARENT_FOLDER, meta.isCreateParentFolder() ) );
+    result.add( getEntry( Entry.INCLUDE_STEPNR, meta.isStepNrInFilename() ) );
+    result.add( getEntry( Entry.INCLUDE_PARTNR, meta.isPartNrInFilename() ) );
+    result.add( getEntry( Entry.INCLUDE_DATE, meta.isDateInFilename() ) );
+    result.add( getEntry( Entry.INCLUDE_TIME, meta.isTimeInFilename() ) );
+    result.add( getEntry( Entry.SPECIFY_FORMAT, meta.isSpecifyFormat() ) );
+    result.add( getEntry( Entry.DATE_FORMAT, meta.getDateTimeFormat() ) );
+    result.add( getEntry( Entry.ADD_TO_RESULT, meta.isAddToResult() ) );
+    result.add( getEntry( Entry.BLOCKSIZE, meta.getBlockSize() ) );
+    result.add( getEntry( Entry.PAGESIZE, meta.getPageSize() ) );
+    result.add( getEntry( Entry.COMPRESSION, meta.getCompressionCodec() ) );
+    result.add( getEntry( Entry.DICTIONARY_COMPRESSION, meta.isEnableDictionaryCompression() ) );
+
+    StepInjectionMetaEntry fieldsEntry = getEntry( Entry.OUTPUT_FIELDS );
+    if( !Const.isEmpty( meta.getOutputFields() ) ) {
+      for( ParquetOutputField outputField : meta.getOutputFields() ) {
+        StepInjectionMetaEntry fieldEntry = getEntry( Entry.OUTPUT_FIELD );
+        fieldEntry.getDetails().add( fieldEntry );
+        List<StepInjectionMetaEntry> fieldDetails = fieldEntry.getDetails();
+
+        fieldDetails.add( getEntry( Entry.STREAM_NAME, outputField.getName() ) );
+        fieldDetails.add( getEntry( Entry.PATH, outputField.getPath() ) );
+        fieldDetails.add( getEntry( Entry.NULLABLE, outputField.getNullable() ) );
+      }
+    }
+    result.add( fieldsEntry );
+
+    return result;
   }
 
 
