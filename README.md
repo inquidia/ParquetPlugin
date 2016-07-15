@@ -42,6 +42,8 @@ Pentaho currently does not provide a mechanism allowing for plugin steps to be d
   
   1.4. protobuf-java.jar
   
+  1.5. htrace*.jar
+  
 2. It is recommended you copy your Hadoop configuration files (hdfs-site.xml, core-site.xml, etc.) to the data-integration folder.
 
 Parquet Output Usage
